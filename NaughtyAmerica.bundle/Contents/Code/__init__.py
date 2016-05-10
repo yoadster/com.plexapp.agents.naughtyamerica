@@ -19,6 +19,12 @@ def any(s):
 def capitalize(line):
     return ' '.join([s[0].upper() + s[1:] for s in line.split(' ')])
 
+def tagAleadyExists(tag,metadata):
+    for t in metadata.genres:
+        if t.lower() == tag.lower():
+            return True
+    return False
+
 def Start():
     HTTP.CacheTime = CACHE_1DAY
 
@@ -88,38 +94,37 @@ class EXCAgent(Agent.Movies):
 
         # Genres
         metadata.genres.clear()
-        genres = detailsPageElements.xpath('//a[@class="cat-tag"]')
+        genres = detailsPageElements.xpath('//a[contains(@class,"cat-tag")]')
         genreFilter=[]
         if Prefs["excludegenre"] is not None:
-            genreFilter = Prefs["excludegenre"].split(';')
+            genreFilter = Prefs["excludegenre"].lower().split(';')
 
         genreMaps=[]
         genreMapsDict = {}
 
         if Prefs["tagmapping"] is not None:
-            Log("tagmapping")
             genreMaps = Prefs["tagmapping"].split(';')
             for mapping in genreMaps:
                 keyVal = mapping.split("=")
-                genreMapsDict[keyVal[0]] = keyVal[1]
+                genreMapsDict[keyVal[0]] = keyVal[1].lower()
         else:
             genreMapsDict = None
-
         
         if len(genres) > 0:
             for genreLink in genres:
-                genreName = genreLink.text_content().strip('\n')
+                genreName = genreLink.text_content().strip('\n').lower()          
                 if any(genreName in g for g in genreFilter) == False:
                     if genreMapsDict is not None:
                         if genreName in genreMapsDict:
-                            Log(genreMapsDict[genreName])
-                            metadata.genres.add(genreMapsDict[genreName])
+                            Log(genreName + " in genre map will add " + genreMapsDict[genreName])
+                            if not tagAleadyExists(genreMapsDict[genreName],metadata):
+                                metadata.genres.add(capitalize(genreMapsDict[genreName]))
                         else:
-                            Log('Not Mapped')
-                            metadata.genres.add(genreName)
+                            Log(genreName + " not in genre map")
+                            if not tagAleadyExists(genreName,metadata):
+                                metadata.genres.add(capitalize(genreName))
                     else:   
-                        cap = capitalize(genreName)
-                        metadata.genres.add(cap)
+                        metadata.genres.add(capitalize(genreName))
 
         date = detailsPageElements.xpath('//p[@class="scenedate"]')[0].text_content().split(":")[1].strip()
         date_object = datetime.strptime(date, '%b %d, %Y')
@@ -147,16 +152,16 @@ class EXCAgent(Agent.Movies):
         if('actors' not in Dict):
             Log('******NOT IN DICT******')
             maleActorHtml = None
-            maleActorHtml = HTML.ElementFromURL('http://www.data18.com/sys/get3.php?t=2&network=1&request=/sites/brazzers/')
+            maleActorHtml = HTML.ElementFromURL('http://www.data18.com/pornstars/male.html')
 
             # Add missing actors
-            for actor in maleActorHtml.xpath('//option'):
-                itemString = actor.text_content()
-                actorArray = itemString.split("(")
+            for actor in maleActorHtml.xpath('//span[@class="gen11"]//a'):
+                # itemString = actor.text_content()
+                # actorArray = itemString.split("(")
                 try:
                     # Add item to array
-                    actor = actorArray[0].strip()
-                    maleActors.append(actor)
+                    # actor = actorArray[0].strip()
+                    maleActors.append(actor.text_content())
                 except: pass
             Dict['actors'] = maleActors
             Dict.Save()
