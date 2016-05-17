@@ -25,6 +25,18 @@ def tagAleadyExists(tag,metadata):
             return True
     return False
 
+def posterAlreadyExists(posterUrl,metadata):
+    for p in metadata.posters.keys():
+        Log(p.lower())
+        if p.lower() == posterUrl.lower():
+            Log("Found " + posterUrl + " in posters collection")
+            return True
+
+    for p in metadata.art.keys():
+        if p.lower() == posterUrl.lower():
+            return True
+    return False
+
 def Start():
     HTTP.CacheTime = CACHE_1DAY
 
@@ -55,27 +67,23 @@ class EXCAgent(Agent.Movies):
         encodedTitle = temp.replace(" ","-")
         searchResults = HTML.ElementFromURL('http://tour.naughtyamerica.com/search?term=' + encodedTitle.lower())
 
-	pages = searchResults.xpath('//div[@class="pagination"]//a')
-
         for searchResult in searchResults.xpath('//div[@class="grid-item"]'):
             link = searchResult.xpath('.//a')[0]
             titleNoFormatting = link.get('title')
             curID = link.get('href').replace('/','_').split("?")[0]
             score = 100 - Util.LevenshteinDistance(title.lower(), titleNoFormatting.lower())             
             results.Append(MetadataSearchResult(id = curID, name = titleNoFormatting, score = score, lang = lang))
-            Log(curID)
 
-        if (pages != None):
-            for page in pages:
-                url = page.get('href')
-                Log(url)
-                if('&p=' in url):
-                    addPage = HTML.ElementFromURL('http://tour.naughtyamerica.com' + url)
-                    for searchResult in addPage.xpath('//div[@id="more_porn_videos_content_area"]//p[@class="model-name-large"]//a'):
-                        titleNoFormatting = searchResult.get('title')
-                        curID = searchResult.get('href').replace('/','_').split("?")[0]
-                        score = 100 - Util.LevenshteinDistance(title.lower(), titleNoFormatting.lower())             
-                        results.Append(MetadataSearchResult(id = curID, name = titleNoFormatting, score = score, lang = lang))
+        for page in searchResults.xpath('//ul[@class="pagination"]//a'):
+            url = page.get('href')
+            Log(url)
+            addPage = HTML.ElementFromURL(url)
+            for searchResult in addPage.xpath('//div[@class="grid-item"]'):
+                link = searchResult.xpath('.//a')[0]
+                titleNoFormatting = link.get('title')
+                curID = link.get('href').replace('/','_').split("?")[0]
+                score = 100 - Util.LevenshteinDistance(title.lower(), titleNoFormatting.lower())             
+                results.Append(MetadataSearchResult(id = curID, name = titleNoFormatting, score = score, lang = lang))
         
         results.Sort('score', descending=True)            
 
@@ -130,6 +138,9 @@ class EXCAgent(Agent.Movies):
         date_object = datetime.strptime(date, '%b %d, %Y')
         metadata.originally_available_at = date_object
         metadata.year = metadata.originally_available_at.year
+
+        rating = detailsPageElements.xpath('//*[@id="scene-info"]/div[3]/p')[0].text_content().replace('Scene Rating: ','')
+        metadata.rating = float(rating)
 
         # Starring/Collection
         # Create a string array to hold actors
@@ -189,13 +200,16 @@ class EXCAgent(Agent.Movies):
 
         #Posters
         i = 1
+
         for poster in detailsPageElements.xpath('//a[contains(@class,"fancybox")]'):
             posterUrl = poster.get('href').strip()
             thumbUrl = poster.xpath('.//img')[0].get('src')
-            if not "vert_scene" in str(posterUrl):
-                Log("ADDED ART")
-                metadata.art[posterUrl] = Proxy.Preview(HTTP.Request(thumbUrl, headers={'Referer': 'http://www.google.com'}).content, sort_order = i)
-            else:
-                Log("ADDED POSTER")
-                metadata.posters[posterUrl] = Proxy.Preview(HTTP.Request(thumbUrl, headers={'Referer': 'http://www.google.com'}).content, sort_order = i)
+            if not posterAlreadyExists(posterUrl,metadata):
+                Log("media doesnt exist in key")
+                if not "vert_scene" in str(posterUrl):
+                    Log("ADDED ART")
+                    metadata.art[posterUrl] = Proxy.Preview(HTTP.Request(thumbUrl, headers={'Referer': 'http://www.google.com'}).content, sort_order = i)
+                else:
+                    Log("ADDED POSTER")
+                    metadata.posters[posterUrl] = Proxy.Preview(HTTP.Request(thumbUrl, headers={'Referer': 'http://www.google.com'}).content, sort_order = i)
             i += 1
