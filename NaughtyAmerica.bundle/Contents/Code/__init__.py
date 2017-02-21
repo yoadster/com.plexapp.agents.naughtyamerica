@@ -59,17 +59,29 @@ class EXCAgent(Agent.Movies):
         if media.primary_metadata is not None:
             year = media.primary_metadata.year
 
-        trimmedTitle = title.split(" & ")
-        temp = trimmedTitle[0]
-        if(',' in temp):
-            temp = temp.split(',')[0]
+##        trimmedTitle = title.split(" & ")
+##        temp = trimmedTitle[0]
+##        if(',' in temp):
+##            temp = temp.split(',')[0]
 
-        encodedTitle = temp.replace(" ","-")
+        encodedTitle = title.replace(" ","+").replace("&","%26").replace("'","%27")
         searchResults = HTML.ElementFromURL('http://tour.naughtyamerica.com/search?term=' + encodedTitle.lower())
+        resultItems = searchResults.xpath('//div[@class="grid-item"]')
 
-        for searchResult in searchResults.xpath('//div[@class="grid-item"]'):
+        Log(len(resultItems))
+        if len(resultItems) == 0:
+            trimmedTitle = title.split(" & ")
+            temp = trimmedTitle[0]
+            if(',' in temp):
+                temp = temp.split(',')[0]
+            encodedTitle = temp.replace(" ","+").replace("&","%26").replace("'","%27")
+            searchResults = HTML.ElementFromURL('http://tour.naughtyamerica.com/search?term=' + encodedTitle.lower())
+            resultItems = searchResults.xpath('//div[@class="grid-item"]')
+
+        for searchResult in resultItems:
             link = searchResult.xpath('.//a')[0]
             titleNoFormatting = link.get('title')
+            Log(titleNoFormatting)
             curID = link.get('href').replace('/','_').split("?")[0]
             score = 100 - Util.LevenshteinDistance(title.lower(), titleNoFormatting.lower())             
             results.Append(MetadataSearchResult(id = curID, name = titleNoFormatting, score = score, lang = lang))
@@ -97,8 +109,8 @@ class EXCAgent(Agent.Movies):
         # Summary
         paragraph = detailsPageElements.xpath('//p[@class="synopsis_txt"]')[0].text_content()
         metadata.summary = paragraph.replace('&13;', '').strip(' \t\n\r"') + "\n\n"
-        metadata.tagline = detailsPageElements.xpath('//div[@id="synopsis"]//h1')[0].text_content().split(' in ')[1]
-        metadata.title = detailsPageElements.xpath('//div[@id="synopsis"]//h1')[0].text_content()
+        metadata.tagline = detailsPageElements.xpath('//*[@id="synopsis"]/p[1]/a')[0].text_content()
+        metadata.title = detailsPageElements.xpath('//div[@id="synopsis"]//h1')[0].text_content() + " in " + metadata.tagline
 
         # Genres
         metadata.genres.clear()
@@ -134,13 +146,13 @@ class EXCAgent(Agent.Movies):
                     else:   
                         metadata.genres.add(capitalize(genreName))
 
-        date = detailsPageElements.xpath('//p[@class="scenedate"]')[0].text_content().split(":")[1].strip()
+        date = detailsPageElements.xpath('//p[@class="scenedate"]')[0].text_content().strip()
         date_object = datetime.strptime(date, '%b %d, %Y')
         metadata.originally_available_at = date_object
         metadata.year = metadata.originally_available_at.year
 
-        rating = detailsPageElements.xpath('//*[@id="scene-info"]/div[3]/p')[0].text_content().replace('Scene Rating: ','')
-        metadata.rating = float(rating)
+        #rating = detailsPageElements.xpath('//*[@id="scene-info"]/div[3]/p')[0].text_content().replace('Scene Rating: ','')
+        #metadata.rating = float(rating)
 
         # Starring/Collection
         # Create a string array to hold actors
@@ -148,9 +160,11 @@ class EXCAgent(Agent.Movies):
 
         # Refresh the cache every 50th query
         if('cache_count' not in Dict):
+            Log("git here")
             Dict['cache_count'] = 0
             Dict.Save()
         else:
+            Log("here")
             cache_count = float(Dict['cache_count'])
             if(cache_count == 50):
                 Log(str(cache_count))
@@ -195,7 +209,7 @@ class EXCAgent(Agent.Movies):
             if any(member.text_content().strip() in m for m in maleActors) == False:
                 role = metadata.roles.new()
                 # Add to actor and collection
-                role.actor = member.text_content().strip()
+                role.name = member.text_content().strip()
                 metadata.collections.add(member.text_content().strip())
 
         #Posters
